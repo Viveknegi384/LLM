@@ -1,0 +1,6 @@
+streamlit
+langchain
+pdfminer.six
+sentence-transformers
+faiss-cpu
+langchain-community
