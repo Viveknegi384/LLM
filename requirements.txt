@@ -1,6 +1,10 @@
 streamlit
 langchain
-pdfminer.six
-sentence-transformers
-faiss-cpu
 langchain-community
+langchain-huggingface
+pdfminer.six
+pytesseract
+Pillow
+pdf2image
+faiss-cpu
+sentence-transformers
