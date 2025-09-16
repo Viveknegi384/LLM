@@ -1,5 +1,5 @@
 # src/ingestion/document_parser.py
-from pdfminer.high_level import extract_text
+import pdfplumber
 import os
 import pytesseract
 from PIL import Image
@@ -11,7 +11,7 @@ pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tessera
 
 def parse_pdf_document(file_path):
     """
-    Parses a document to extract all text content, falling back to OCR if needed.
+    Parses a document to extract all text and tables, using OCR as a fallback.
 
     Args:
         file_path (str): The path to the PDF or image file.
@@ -22,30 +22,49 @@ def parse_pdf_document(file_path):
     if not os.path.exists(file_path):
         return "Error: File not found."
 
-    # Try extracting text from the PDF using pdfminer.six (for text-based PDFs)
+    combined_content = ""
     try:
-        text = extract_text(file_path)
-        if text.strip():  # Check if any text was extracted
-            return text
-    except Exception as e:
-        # Fallback to OCR if the initial text extraction fails
-        print(f"Text extraction failed, falling back to OCR: {e}")
+        with pdfplumber.open(file_path) as pdf:
+            # We'll use a loop to process page by page
+            for i, page in enumerate(pdf.pages):
+                page_content = ""
+                
+                # --- Attempt 1: Extract text and tables using pdfplumber ---
+                page_text = page.extract_text()
+                if page_text:
+                    page_content += page_text + "\n\n"
 
-    # OCR process for scanned PDFs or images
-    try:
-        # Convert PDF pages to a list of images
-        images = convert_from_path(file_path)
-        
-        extracted_text = ""
-        # Process each page (image) with OCR
-        for i, image in enumerate(images):
-            # Use pytesseract to extract text from the image
-            page_text = pytesseract.image_to_string(image)
-            extracted_text += page_text + "\n"
-        
-        if extracted_text.strip():
-            return extracted_text
-        else:
-            return "Error: OCR did not find any text."
+                tables = page.extract_tables()
+                if tables:
+                    for table in tables:
+                        markdown_table = "Table on Page " + str(i + 1) + ":\n"
+                        header = table[0]
+                        rows = table[1:]
+                        markdown_table += "| " + " | ".join(map(str, header)) + " |\n"
+                        markdown_table += "|---" * len(header) + "|\n"
+                        for row in rows:
+                            markdown_table += "| " + " | ".join(map(str, row)) + " |\n"
+                        page_content += markdown_table + "\n\n"
+
+                # --- Attempt 2: Fallback to OCR if nothing was found ---
+                if not page_content.strip():
+                    try:
+                        # Convert the current page to an image
+                        image = convert_from_path(file_path, first_page=i+1, last_page=i+1)[0]
+                        # Use pytesseract to extract text from the image
+                        page_text_ocr = pytesseract.image_to_string(image)
+                        if page_text_ocr.strip():
+                            page_content = page_text_ocr + "\n\n"
+                        else:
+                            page_content = "OCR found no text on this page.\n\n"
+                    except Exception as ocr_e:
+                        page_content = f"Error during OCR on page {i+1}: {ocr_e}\n\n"
+
+                combined_content += page_content
     except Exception as e:
-        return f"Error during OCR process: {e}"
+        return f"Error processing document: {e}"
+
+    if not combined_content.strip():
+        return "Error: Document appears to be empty or unreadable."
+
+    return combined_content

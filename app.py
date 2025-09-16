@@ -13,7 +13,6 @@ UPLOAD_DIR = "data/raw"
 VECTOR_DB_DIR = "data/vector_db"
 
 def main():
-    # Corrected function call
     st.set_page_config(layout="wide")
     st.title("KMRL Document Assistant")
 
@@ -45,12 +44,22 @@ def main():
             with open(temp_file_path, "wb") as f:
                 f.write(uploaded_file.getbuffer())
             st.sidebar.success("File uploaded successfully! Processing...")
-            extracted_text = parse_pdf_document(temp_file_path)
-            if "Error" in extracted_text:
-                st.sidebar.error(f"Failed to process document: {extracted_text}")
+            
+            # This line will now extract tables and text
+            extracted_data = parse_pdf_document(temp_file_path)
+
+            if "Error" in extracted_data:
+                st.sidebar.error(f"Failed to process document: {extracted_data}")
             else:
-                st.sidebar.success("Text extraction complete!")
-                chunks = process_and_chunk_text(extracted_text)
+                st.sidebar.success("Document extraction complete! Text and tables processed.")
+                
+                # Display the extracted data (text and tables)
+                with st.expander("View Extracted Data"):
+                    st.markdown(extracted_data)
+                
+                # The rest of the pipeline remains the same
+                chunks = process_and_chunk_text(extracted_data)
+                
                 if chunks:
                     st.sidebar.info(f"Document split into {len(chunks)} chunks. Creating embeddings...")
                     vector_store = get_embeddings_and_vector_store(chunks, db_path=VECTOR_DB_DIR)
@@ -64,10 +73,10 @@ def main():
 
     # --- Query and Answer Section ---
     if "vector_store_exists" in st.session_state and st.session_state["vector_store_exists"]:
-        if "HF_API_TOKEN" not in st.secrets:
-            st.error("Hugging Face API token is not set. Please add it to your Streamlit secrets.")
+        if "GROQ_API_KEY" not in st.secrets:
+            st.error("Groq API key is not set. Please add it to your Streamlit secrets.")
         else:
-            api_token = st.secrets["HF_API_TOKEN"]
+            api_token = st.secrets["GROQ_API_KEY"]
             user_query = st.chat_input("Ask a question about the documents:")
             
             if user_query:
