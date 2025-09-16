@@ -3,10 +3,10 @@ import streamlit as st
 import os
 
 # Import all custom functions
+from src.model.llm_handler import get_rag_chain
 from src.ingestion.document_parser import parse_pdf_document
 from src.processing.text_processor import process_and_chunk_text
-from src.model.embeddings import get_embeddings_and_vector_store, load_vector_store
-from src.model.llm_handler import get_rag_chain
+from src.model.embeddings import get_embeddings_and_vector_store, load_vector_store, add_documents_to_vector_store
 
 # Define constants
 UPLOAD_DIR = "data/raw"
@@ -61,10 +61,20 @@ def main():
                 chunks = process_and_chunk_text(extracted_data)
                 
                 if chunks:
+                    db_exists = os.path.exists(VECTOR_DB_DIR) and os.path.exists(os.path.join(VECTOR_DB_DIR, "index.faiss"))
+                    
                     st.sidebar.info(f"Document split into {len(chunks)} chunks. Creating embeddings...")
-                    vector_store = get_embeddings_and_vector_store(chunks, db_path=VECTOR_DB_DIR)
-                    st.sidebar.success("Embeddings created and stored in the vector database!")
-                    st.session_state["vector_store_exists"] = True
+
+                    if db_exists:
+                        # Add to the existing database
+                        vector_store = add_documents_to_vector_store(chunks, db_path=VECTOR_DB_DIR)
+                        st.sidebar.success("New documents added to the existing vector database!")
+                    else:
+                        # Create a brand new database
+                        vector_store = get_embeddings_and_vector_store(chunks, db_path=VECTOR_DB_DIR)
+                        st.sidebar.success("Embeddings created and stored in a new vector database!")
+                        st.session_state["vector_store_exists"] = True
+
                 else:
                     st.sidebar.warning("No text chunks were generated.")
         finally:
